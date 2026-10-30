@@ -85,11 +85,14 @@ pub fn main(init: std.process.Init) !void {
         totals.dead,
         totals.rescans,
     });
-    try fw.interface.print("context layers: size={d} peak={d} capacity={d} bytes={d}\n", .{
+    const layer_bytes = win.ctxLayerBytes();
+    try fw.interface.print("context layers: value={d} slot={d} peak={d} capacity={d} slot_bytes={d} patch_bytes={d}\n", .{
         @sizeOf(dvui.ContextLayer),
+        @sizeOf(dvui.ContextLayer.Slot),
         win.ctx_layers_peak,
         win.ctx_layers.capacity,
-        @as(usize, @sizeOf(dvui.ContextLayer)) * win.ctx_layers.capacity,
+        layer_bytes.slots,
+        layer_bytes.patches,
     });
     try fw.interface.print("context reads: getters={d} colors={d} fonts={d} sizes={d} overrides={d} copies={d}\n", .{
         reads.getters, reads.colors, reads.fonts, reads.sizes, reads.overrides, reads.copies,

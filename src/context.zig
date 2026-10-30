@@ -45,6 +45,79 @@ pub const ContextLayer = struct {
         }
     }
 
+    /// Which fields a stored layer sets: one bit per field, in `Tag` order.
+    pub const Mask = u64;
+
+    /// Every field of a layer, in the order the bitset and the value cells use.
+    pub const Tag = enum(u6) {
+        id_extra,
+        tag,
+        name,
+        role,
+        label,
+        data_out,
+        rect,
+        expand,
+        gravity_x,
+        gravity_y,
+        tab_index,
+        color_fill,
+        color_fill_hover,
+        color_fill_press,
+        color_text,
+        color_text_hover,
+        color_text_press,
+        color_border,
+        ninepatch_fill,
+        ninepatch_hover,
+        ninepatch_press,
+        style,
+        theme,
+        font,
+        rotation,
+        margin,
+        border,
+        padding,
+        corners,
+        min_size_content,
+        max_size_content,
+        background,
+        box_shadow,
+    };
+
+    /// The type a field is stored as: the field's own type, without the
+    /// optional that records "no layer set this".
+    pub fn Payload(comptime field: []const u8) type {
+        const T = @FieldType(ContextLayer, field);
+        return if (@typeInfo(T) == .optional) @typeInfo(T).optional.child else T;
+    }
+
+    /// Alignment a stored value needs: the widest alignment any field asks for.
+    ///
+    /// A stored value is read back as a `*const T` into the cell holding it, so
+    /// the cell's address must satisfy `@alignOf(T)`.  The cells live in a byte
+    /// buffer allocated at this alignment and `cell_size` is a multiple of it,
+    /// so every cell satisfies every field's alignment.
+    pub const cell_align = blk: {
+        var widest: usize = 1;
+        for (@typeInfo(ContextLayer).@"struct".field_names) |f_name| {
+            if (std.mem.eql(u8, f_name, "_base")) continue;
+            widest = @max(widest, @alignOf(Payload(f_name)));
+        }
+        break :blk widest;
+    };
+
+    /// Bytes one stored value occupies: the widest field rounded up to
+    /// `cell_align`, so every field's value fits a cell aligned.
+    pub const cell_size = blk: {
+        var biggest: usize = 1;
+        for (@typeInfo(ContextLayer).@"struct".field_names) |f_name| {
+            if (std.mem.eql(u8, f_name, "_base")) continue;
+            biggest = @max(biggest, @sizeOf(Payload(f_name)));
+        }
+        break :blk std.mem.alignForward(usize, biggest, cell_align);
+    };
+
     /// Mixed into widget id. Use when @src() is not unique (like in a loop).
     id_extra: ?usize = null,
 
@@ -250,20 +323,103 @@ pub const ContextLayer = struct {
         alpha: f32 = 0.5,
     };
 
-    /// The layer this one falls back to, or null at the root of a chain.
-    inline fn base(self: *const ContextLayer) ?*const ContextLayer {
-        const idx = self._base orelse return null;
-        return &dvui.currentWindow().ctx_layers.items[idx];
-    }
-
     /// The value of `field` from the first layer in this chain that sets it.
-    inline fn resolve(self: *const ContextLayer, comptime field: []const u8) @FieldType(ContextLayer, field) {
-        var l: ?*const ContextLayer = self;
-        while (l) |cur| {
-            if (@field(cur, field)) |v| return v;
-            l = cur.base();
+    ///
+    /// The layer's own fields are inline; the layers it inherits from are only
+    /// stored, as a bitset of which fields they set plus those fields' values,
+    /// so a chain costs one value per field an author wrote rather than a full
+    /// layer of nulls.
+    pub fn get(self: *const ContextLayer, comptime field: []const u8) @FieldType(ContextLayer, field) {
+        if (@field(self, field)) |v| return v;
+
+        const items = dvui.currentWindow().ctx_layers.items;
+        var idx = self._base;
+        while (idx) |at| {
+            const slot = items[at];
+            if (slot.cellOf(field)) |cell| return slot.read(field, cell);
+            idx = slot.base;
         }
         return null;
+    }
+
+    /// Whether any layer in this chain sets `field`.
+    pub fn has(self: *const ContextLayer, comptime field: []const u8) bool {
+        return self.get(field) != null;
+    }
+
+    /// Whether the resolved role is `role`.  False when no layer sets a role.
+    pub fn roleIs(self: *const ContextLayer, role: dvui.AccessKit.Role) bool {
+        const r = self.get("role") orelse return false;
+        return r == role;
+    }
+
+    /// One stored layer's answer: which fields it set, and those fields' values.
+    ///
+    /// Availability is a bitset, not a per-field optional: for a field present
+    /// in `mask`, its value sits in cell `@popCount(mask & (bit - 1))` of
+    /// `values`.  `cellOf` finds that cell by walking the bits below with
+    /// `@ctz`, so a read costs one test per set field, and the bytes after the
+    /// last set field are never allocated at all.
+    pub const Slot = struct {
+        base: ?u32 = null,
+        mask: Mask = 0,
+        /// `@popCount(mask)` cells of `cell_size` bytes, in field order.
+        values: []align(cell_align) const u8 = &.{},
+
+        /// Which cell of `values` holds `field`, or null when this layer does
+        /// not set it.
+        pub inline fn cellOf(slot: Slot, comptime field: []const u8) ?usize {
+            const target = @intFromEnum(@field(Tag, field));
+            if (slot.mask & (@as(Mask, 1) << @intCast(target)) == 0) return null;
+
+            var bits = slot.mask;
+            var cell: usize = 0;
+            while (bits != 0) : (bits &= bits - 1) {
+                if (@ctz(bits) == target) return cell;
+                cell += 1;
+            }
+            return null;
+        }
+
+        /// The value stored in `cell` for `field`.
+        ///
+        /// The cell is read as `T` from an address `cell_size`-strided from a
+        /// buffer allocated at `cell_align`, so the address meets `@alignOf(T)`.
+        pub inline fn read(slot: Slot, comptime field: []const u8, cell: usize) Payload(field) {
+            const T = Payload(field);
+            const bytes: *const [@sizeOf(T)]u8 = @ptrCast(&slot.values[cell * cell_size]);
+            return std.mem.bytesToValue(T, bytes);
+        }
+    };
+
+    /// How many values this layer stores.
+    pub inline fn valueCount(self: *const ContextLayer) usize {
+        var n: usize = 0;
+        inline for (@typeInfo(ContextLayer).@"struct".field_names) |f_name| {
+            if (comptime !std.mem.eql(u8, f_name, "_base")) {
+                if (@field(self, f_name) != null) n += 1;
+            }
+        }
+        return n;
+    }
+
+    /// Writes this layer's set fields into `out` (which needs `valueCount` cells
+    /// of room) and returns the bitset naming them.
+    pub inline fn writeLayer(self: *const ContextLayer, out: []align(cell_align) u8) Mask {
+        var mask: Mask = 0;
+        var cell: usize = 0;
+        inline for (@typeInfo(ContextLayer).@"struct".field_names) |f_name| {
+            if (comptime !std.mem.eql(u8, f_name, "_base")) {
+                if (@field(self, f_name)) |v| {
+                    const T = Payload(f_name);
+                    const ptr: *T = @ptrCast(@alignCast(&out[cell * cell_size]));
+                    ptr.* = v;
+                    mask |= @as(Mask, 1) << @intCast(@intFromEnum(@field(Tag, f_name)));
+                    cell += 1;
+                }
+            }
+        }
+        return mask;
     }
 
     /// All the colors you can ask ContextLayer for
@@ -286,13 +442,13 @@ pub const ContextLayer = struct {
     pub fn color(self: *const ContextLayer, ask: ColorAsk) ColorOrGradient {
         noted(.colors);
         return switch (ask) {
-            .border => self.resolve("color_border"),
-            .fill => self.resolve("color_fill"),
-            .fill_hover => self.resolve("color_fill_hover") orelse if (self.resolve("color_fill")) |cog| adjustColorOrGradientForState(self, cog, ask) else null,
-            .fill_press => self.resolve("color_fill_press") orelse if (self.resolve("color_fill")) |cog| adjustColorOrGradientForState(self, cog, ask) else null,
-            .text => self.resolve("color_text"),
-            .text_hover => self.resolve("color_text_hover") orelse if (self.resolve("color_text")) |cog| adjustColorOrGradientForState(self, cog, ask) else null,
-            .text_press => self.resolve("color_text_press") orelse if (self.resolve("color_text")) |cog| adjustColorOrGradientForState(self, cog, ask) else null,
+            .border => self.get("color_border"),
+            .fill => self.get("color_fill"),
+            .fill_hover => self.get("color_fill_hover") orelse if (self.get("color_fill")) |cog| adjustColorOrGradientForState(self, cog, ask) else null,
+            .fill_press => self.get("color_fill_press") orelse if (self.get("color_fill")) |cog| adjustColorOrGradientForState(self, cog, ask) else null,
+            .text => self.get("color_text"),
+            .text_hover => self.get("color_text_hover") orelse if (self.get("color_text")) |cog| adjustColorOrGradientForState(self, cog, ask) else null,
+            .text_press => self.get("color_text_press") orelse if (self.get("color_text")) |cog| adjustColorOrGradientForState(self, cog, ask) else null,
         } orelse ColorOrGradient{ .color = self.themeGet().color(self.styleGet(), ask) };
     }
 
@@ -313,9 +469,9 @@ pub const ContextLayer = struct {
     pub fn ninepatch(self: *const ContextLayer, ask: NinepatchAsk) ?*const Ninepatch {
         noted(.getters);
         const np_opt = switch (ask) {
-            .fill => self.resolve("ninepatch_fill"),
-            .hover => self.resolve("ninepatch_hover") orelse self.resolve("ninepatch_fill"),
-            .press => self.resolve("ninepatch_press") orelse self.resolve("ninepatch_fill"),
+            .fill => self.get("ninepatch_fill"),
+            .hover => self.get("ninepatch_hover") orelse self.get("ninepatch_fill"),
+            .press => self.get("ninepatch_press") orelse self.get("ninepatch_fill"),
         };
         if (np_opt) |np| return np;
 
@@ -324,47 +480,47 @@ pub const ContextLayer = struct {
 
     pub fn fontGet(self: *const ContextLayer) Font {
         noted(.fonts);
-        return self.resolve("font") orelse self.themeGet().font_body;
+        return self.get("font") orelse self.themeGet().font_body;
     }
 
     pub fn idExtra(self: *const ContextLayer) usize {
         noted(.getters);
-        return self.resolve("id_extra") orelse 0;
+        return self.get("id_extra") orelse (Context_Prototype{}).id_extra;
     }
 
     pub fn expandGet(self: *const ContextLayer) Expand {
         noted(.getters);
-        return self.resolve("expand") orelse .none;
+        return self.get("expand") orelse (Context_Prototype{}).expand;
     }
 
     pub fn gravityGet(self: *const ContextLayer) Gravity {
         noted(.getters);
-        return .{ .x = self.resolve("gravity_x") orelse 0.0, .y = self.resolve("gravity_y") orelse 0.0 };
+        return .{ .x = self.get("gravity_x") orelse (Context_Prototype{}).gravity_x, .y = self.get("gravity_y") orelse (Context_Prototype{}).gravity_y };
     }
 
     pub fn marginGet(self: *const ContextLayer) Rect {
         noted(.getters);
-        return self.resolve("margin") orelse Rect{};
+        return self.get("margin") orelse (Context_Prototype{}).margin;
     }
 
     pub fn borderGet(self: *const ContextLayer) Rect {
         noted(.getters);
-        return self.resolve("border") orelse Rect{};
+        return self.get("border") orelse (Context_Prototype{}).border;
     }
 
     pub fn backgroundGet(self: *const ContextLayer) bool {
         noted(.getters);
-        return self.resolve("background") orelse false;
+        return self.get("background") orelse (Context_Prototype{}).background;
     }
 
     pub fn paddingGet(self: *const ContextLayer) Rect {
         noted(.getters);
-        return self.resolve("padding") orelse Rect{};
+        return self.get("padding") orelse (Context_Prototype{}).padding;
     }
 
     pub fn cornersGet(self: *const ContextLayer) CornerRect {
         noted(.getters);
-        return (self.resolve("corners") orelse CornerRect{}).finalize(self.themeGet());
+        return (self.get("corners") orelse (Context_Prototype{}).corners).finalize(self.themeGet());
     }
 
     /// Combines min_size_content and max_size_content, adds margin/border/padding.
@@ -375,7 +531,7 @@ pub const ContextLayer = struct {
 
     pub fn min_size_contentGet(self: *const ContextLayer) Size {
         noted(.sizes);
-        return self.resolve("min_size_content") orelse Size{};
+        return self.get("min_size_content") orelse (Context_Prototype{}).min_size_content;
     }
 
     pub fn max_sizeGet(self: *const ContextLayer) Size {
@@ -385,64 +541,43 @@ pub const ContextLayer = struct {
 
     pub fn max_size_contentGet(self: *const ContextLayer) Size {
         noted(.sizes);
-        if (self.resolve("max_size_content")) |msc| {
-            return .{ .w = msc.w, .h = msc.h };
-        } else {
-            return Size.all(dvui.max_float_safe);
-        }
+        const msc = self.get("max_size_content") orelse (Context_Prototype{}).max_size_content;
+        return .{ .w = msc.w, .h = msc.h };
     }
 
     pub fn rotationGet(self: *const ContextLayer) f32 {
         noted(.getters);
-        return self.resolve("rotation") orelse 0.0;
+        return self.get("rotation") orelse (Context_Prototype{}).rotation;
     }
 
     pub fn styleGet(self: *const ContextLayer) Theme.Style.Name {
         noted(.getters);
-        return self.resolve("style") orelse .content;
+        return self.get("style") orelse (Context_Prototype{}).style;
     }
 
     pub fn themeGet(self: *const ContextLayer) *const Theme {
         noted(.getters);
-        return self.resolve("theme") orelse &dvui.currentWindow().theme;
+        return self.get("theme") orelse &dvui.currentWindow().theme;
     }
 
-    /// The value of `field` from the first layer that sets it, or null.
-    ///
-    /// This is the read for fields whose "unset" state is meaningful, like
-    /// `rect` or `tab_index`; use `has` to ask whether any layer set it.
-    pub fn get(self: *const ContextLayer, comptime field: []const u8) @FieldType(ContextLayer, field) {
-        return self.resolve(field);
-    }
-
-    /// Whether any layer in this chain sets `field`.
-    pub fn has(self: *const ContextLayer, comptime field: []const u8) bool {
-        return self.resolve(field) != null;
-    }
-
-    /// Whether the resolved role is `role`.  False when no layer sets a role.
-    pub fn roleIs(self: *const ContextLayer, role: dvui.AccessKit.Role) bool {
-        const r = self.resolve("role") orelse return false;
-        return r == role;
-    }
 
     /// Keeps only the fonts and colors. Intended for stuff like buttons passing
     /// down options to internal widgets.
     pub fn styleOnly(self: *const ContextLayer) ContextLayer {
         noted(.copies);
         return .{
-            .style = self.resolve("style"),
-            .theme = self.resolve("theme"),
+            .style = self.get("style"),
+            .theme = self.get("theme"),
 
-            .color_fill = self.resolve("color_fill"),
-            .color_fill_hover = self.resolve("color_fill_hover"),
-            .color_fill_press = self.resolve("color_fill_press"),
-            .color_text = self.resolve("color_text"),
-            .color_text_hover = self.resolve("color_text_hover"),
-            .color_text_press = self.resolve("color_text_press"),
-            .color_border = self.resolve("color_border"),
+            .color_fill = self.get("color_fill"),
+            .color_fill_hover = self.get("color_fill_hover"),
+            .color_fill_press = self.get("color_fill_press"),
+            .color_text = self.get("color_text"),
+            .color_text_hover = self.get("color_text_hover"),
+            .color_text_press = self.get("color_text_press"),
+            .color_border = self.get("color_border"),
 
-            .font = self.resolve("font"),
+            .font = self.get("font"),
         };
     }
 
@@ -497,34 +632,34 @@ pub const ContextLayer = struct {
             .ninepatch_press = &Ninepatch.none,
 
             // keep the rest
-            .style = self.resolve("style"),
-            .theme = self.resolve("theme"),
-            .color_fill = self.resolve("color_fill"),
-            .color_fill_hover = self.resolve("color_fill_hover"),
-            .color_fill_press = self.resolve("color_fill_press"),
-            .color_text = self.resolve("color_text"),
-            .color_text_hover = self.resolve("color_text_hover"),
-            .color_text_press = self.resolve("color_text_press"),
-            .color_border = self.resolve("color_border"),
+            .style = self.get("style"),
+            .theme = self.get("theme"),
+            .color_fill = self.get("color_fill"),
+            .color_fill_hover = self.get("color_fill_hover"),
+            .color_fill_press = self.get("color_fill_press"),
+            .color_text = self.get("color_text"),
+            .color_text_hover = self.get("color_text_hover"),
+            .color_text_press = self.get("color_text_press"),
+            .color_border = self.get("color_border"),
 
-            .font = self.resolve("font"),
+            .font = self.get("font"),
 
-            .rotation = self.resolve("rotation"),
+            .rotation = self.get("rotation"),
         };
     }
 
     /// Applies `over` on top of this layer and returns the combination.
     ///
     /// Read order is `over`'s own fields, then the chain `over` already had,
-    /// then this layer and its chain -- what the flat merge produces.  The
-    /// layers are not merged: this layer is appended to the window's list and
-    /// `over`'s chain is re-rooted onto it, so a combination costs one copy per
-    /// layer in `over`'s chain instead of a merge over every field.  `flat`
-    /// materializes a chain when a value has to outlive the frame.
+    /// then this layer and its chain -- what a flat merge produces.  Nothing is
+    /// merged: this layer is stored as the patches it sets and `over`'s chain is
+    /// re-rooted onto it, so a combination costs one patch per field actually
+    /// written.  `flat` materializes a chain when a value has to outlive the
+    /// frame.
     pub fn override(self: *const ContextLayer, over: ContextLayer) ContextLayer {
         noted(.overrides);
         const cw = dvui.currentWindow();
-        const self_slot = cw.ctxLayerPush(self.*) orelse return self.overrideFlat(over);
+        const self_slot = cw.ctxLayerPushLayer(self.*) orelse return self.overrideFlat(over);
 
         var ret = over;
         if (over._base) |over_base| {
@@ -559,7 +694,7 @@ pub const ContextLayer = struct {
         var ret: ContextLayer = .{};
         inline for (@typeInfo(ContextLayer).@"struct".field_names) |f_name| {
             if (comptime !std.mem.eql(u8, f_name, "_base")) {
-                @field(ret, f_name) = self.resolve(f_name);
+                @field(ret, f_name) = self.get(f_name);
             }
         }
         return ret;
@@ -587,7 +722,7 @@ pub const ContextLayer = struct {
 
         hasher.update(asBytes(&self.min_size_contentGet()));
         hasher.update(asBytes(&self.max_size_contentGet()));
-        if (self.resolve("rect")) |rect| hasher.update(asBytes(&rect));
+        if (self.get("rect")) |rect| hasher.update(asBytes(&rect));
 
         hasher.update(asBytes(&self.borderGet()));
         hasher.update(asBytes(&self.marginGet()));
@@ -603,21 +738,21 @@ pub const ContextLayer = struct {
         // FIXME: Should hash the theme fields here in a consistent way
         // hasher.update(asBytes(self.themeGet()));
 
-        if (self.resolve("color_fill")) |col| hasher.update(asBytes(&col));
-        if (self.resolve("color_fill_hover")) |col| hasher.update(asBytes(&col));
-        if (self.resolve("color_fill_press")) |col| hasher.update(asBytes(&col));
-        if (self.resolve("color_text")) |col| hasher.update(asBytes(&col));
-        if (self.resolve("color_text_hover")) |col| hasher.update(asBytes(&col));
-        if (self.resolve("color_text_press")) |col| hasher.update(asBytes(&col));
-        if (self.resolve("color_border")) |col| hasher.update(asBytes(&col));
+        if (self.get("color_fill")) |col| hasher.update(asBytes(&col));
+        if (self.get("color_fill_hover")) |col| hasher.update(asBytes(&col));
+        if (self.get("color_fill_press")) |col| hasher.update(asBytes(&col));
+        if (self.get("color_text")) |col| hasher.update(asBytes(&col));
+        if (self.get("color_text_hover")) |col| hasher.update(asBytes(&col));
+        if (self.get("color_text_press")) |col| hasher.update(asBytes(&col));
+        if (self.get("color_border")) |col| hasher.update(asBytes(&col));
 
         const font = self.fontGet();
         hasher.update(asBytes(&font.hash()));
 
-        if (self.resolve("tab_index")) |ti| hasher.update(asBytes(&ti));
+        if (self.get("tab_index")) |ti| hasher.update(asBytes(&ti));
         hasher.update(asBytes(&self.idExtra()));
-        if (self.resolve("tag")) |tag| hasher.update(tag);
-        if (self.resolve("name")) |name| hasher.update(name);
+        if (self.get("tag")) |tag| hasher.update(tag);
+        if (self.get("name")) |name| hasher.update(name);
 
         return hasher.final();
     }
@@ -637,11 +772,25 @@ test "override resolves through the base layer" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            const base: dvui.ContextLayer = .{ .id_extra = 7, .padding = .all(3) };
-            const overridden = base.override(.{ .name = "x" });
+            const base: dvui.ContextLayer = .{
+                .id_extra = 7,
+                .padding = .all(3),
+                .expand = .horizontal,
+                .color_text = .{ .color = .red },
+                .font = dvui.Font.theme(.body),
+                .min_size_content = .{ .w = 5, .h = 6 },
+                .tab_index = 4,
+            };
+            const overridden = base.override(.{ .name = "x", .background = true });
             if (overridden.idExtra() != 7) return error.BadIdExtra;
             if (overridden.paddingGet().x != 3) return error.BadPadding;
             if (overridden.get("name") == null) return error.BadName;
+            if (overridden.expandGet() != .horizontal) return error.BadExpand;
+            if (overridden.get("color_text") == null) return error.BadColor;
+            if (overridden.get("font") == null) return error.BadFont;
+            if (overridden.min_size_contentGet().w != 5) return error.BadMinSize;
+            if (overridden.get("tab_index") != 4) return error.BadTabIndex;
+            if (!overridden.backgroundGet()) return error.BadBackground;
 
             const flat = overridden.flat();
             if (flat.idExtra() != 7) return error.FlatLostIdExtra;
@@ -656,4 +805,119 @@ test "override resolves through the base layer" {
     }.frame;
 
     _ = try dvui.testing.step(frame);
+}
+
+/// The schema of one layer: every field, with the value it resolves to when no
+/// layer sets it.
+///
+/// Nothing reads this struct as a value.  The sparse `Patch` form is generated
+/// from it, the getters take their fallbacks from it, and a test keeps
+/// `ContextLayer`'s fields in step with it, so a field is declared once and its
+/// default sits next to it.  A field whose empty-chain answer needs the window
+/// (the theme, the body font, theme colours) defaults to null and is resolved by
+/// its getter; everything else defaults to the answer itself.
+pub const Context_Prototype = struct {
+    id_extra: usize = 0,
+    tag: ?[]const u8 = null,
+    name: ?[]const u8 = null,
+    role: ?dvui.AccessKit.Role = null,
+    label: ?ContextLayer.LabelOpts = null,
+    data_out: ?*dvui.WidgetData = null,
+    rect: ?Rect = null,
+    expand: ContextLayer.Expand = .none,
+    gravity_x: f32 = 0,
+    gravity_y: f32 = 0,
+    tab_index: ?u16 = null,
+    color_fill: ?dvui.ColorOrGradient = null,
+    color_fill_hover: ?dvui.ColorOrGradient = null,
+    color_fill_press: ?dvui.ColorOrGradient = null,
+    color_text: ?dvui.ColorOrGradient = null,
+    color_text_hover: ?dvui.ColorOrGradient = null,
+    color_text_press: ?dvui.ColorOrGradient = null,
+    color_border: ?dvui.ColorOrGradient = null,
+    ninepatch_fill: ?*const Ninepatch = null,
+    ninepatch_hover: ?*const Ninepatch = null,
+    ninepatch_press: ?*const Ninepatch = null,
+    style: Theme.Style.Name = .content,
+    theme: ?*const Theme = null,
+    font: ?Font = null,
+    rotation: f32 = 0,
+    margin: Rect = Rect{},
+    border: Rect = Rect{},
+    padding: Rect = Rect{},
+    corners: CornerRect = CornerRect{},
+    min_size_content: Size = Size{},
+    max_size_content: ContextLayer.MaxSize = .{ .w = dvui.max_float_safe, .h = dvui.max_float_safe },
+    background: bool = false,
+    box_shadow: ?ContextLayer.BoxShadow = null,
+};
+
+test "every Context_Prototype field has a default" {
+    // Constructing the prototype empty is the check: Zig rejects a field with
+    // no default, and names it.
+    const empty: Context_Prototype = .{};
+    _ = empty;
+}
+
+test "ContextLayer carries every Context_Prototype field as a nullable" {
+    inline for (@typeInfo(Context_Prototype).@"struct".field_names) |f_name| {
+        if (!@hasField(ContextLayer, f_name)) {
+            @compileError("ContextLayer is missing " ++ f_name);
+        }
+        if (@typeInfo(@FieldType(ContextLayer, f_name)) != .optional) {
+            @compileError("ContextLayer." ++ f_name ++ " is not optional");
+        }
+    }
+}
+
+test "stored values fit and align in their cells" {
+    comptime {
+        for (@typeInfo(ContextLayer).@"struct".field_names) |f_name| {
+            if (std.mem.eql(u8, f_name, "_base")) continue;
+            const T = ContextLayer.Payload(f_name);
+            // A cell holds one value, addressed as a *T, so its size must cover
+            // the value and its stride must satisfy the type's alignment.
+            if (@sizeOf(T) > ContextLayer.cell_size) @compileError("cell too small for " ++ f_name);
+            if (@alignOf(T) > ContextLayer.cell_align) @compileError("cell alignment too small for " ++ f_name);
+            if (ContextLayer.cell_size % @alignOf(T) != 0) @compileError("cell stride breaks alignment of " ++ f_name);
+        }
+    }
+}
+
+test "Tag names every field of a layer, in order" {
+    comptime {
+        var expected: usize = 0;
+        for (@typeInfo(ContextLayer).@"struct".field_names) |f_name| {
+            if (std.mem.eql(u8, f_name, "_base")) continue;
+            if (!@hasField(ContextLayer.Tag, f_name)) @compileError("Tag is missing " ++ f_name);
+            if (@intFromEnum(@field(ContextLayer.Tag, f_name)) != expected) @compileError("Tag order is wrong at " ++ f_name);
+            expected += 1;
+        }
+        if (expected > @bitSizeOf(ContextLayer.Mask)) @compileError("Mask is too narrow for the layer's fields");
+    }
+}
+
+test "a stored layer reads back what it wrote" {
+    const layer: ContextLayer = .{
+        .name = "x",
+        .style = .highlight,
+        .padding = .all(2),
+        .expand = .vertical,
+        .tab_index = 9,
+        .background = true,
+    };
+
+    const cells = layer.valueCount();
+    var buf: [8 * ContextLayer.cell_size]u8 align(ContextLayer.cell_align) = undefined;
+    const values = buf[0 .. cells * ContextLayer.cell_size];
+    const mask = layer.writeLayer(values);
+    const slot: ContextLayer.Slot = .{ .mask = mask, .values = values };
+
+    if (!std.mem.eql(u8, slot.read("name", slot.cellOf("name").?), "x")) return error.BadName;
+    if (slot.read("style", slot.cellOf("style").?) != .highlight) return error.BadStyle;
+    if (slot.read("padding", slot.cellOf("padding").?).x != 2) return error.BadPadding;
+    if (slot.read("expand", slot.cellOf("expand").?) != .vertical) return error.BadExpand;
+    if (slot.read("tab_index", slot.cellOf("tab_index").?) != 9) return error.BadTab;
+    if (!slot.read("background", slot.cellOf("background").?)) return error.BadBackground;
+    if (slot.cellOf("margin") != null) return error.PhantomField;
 }

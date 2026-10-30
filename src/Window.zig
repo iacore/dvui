@@ -164,7 +164,9 @@ _widget_stack: WidgetStack,
 /// index into this list as its base; the list only appends within a frame and
 /// is cleared in `begin`, so a layer value must not outlive the frame it was
 /// built in (`ContextLayer.flat` is the way to keep one).
-ctx_layers: std.ArrayListUnmanaged(dvui.ContextLayer) = .empty,
+ctx_layers: std.ArrayListUnmanaged(dvui.ContextLayer.Slot) = .empty,
+/// Where the patches of this frame's layers are allocated; reset in `begin`.
+_ctx_patches: std.heap.ArenaAllocator,
 /// Most layers live at once in a frame, and the capacity the list holds, so a
 /// benchmark can report what the chain costs in memory.
 ctx_layers_peak: u32 = 0,
@@ -257,6 +259,7 @@ pub fn init(
         .gpa = gpa,
         ._arena = if (init_opts.arena) |a| a else .init(gpa),
         ._lifo_arena = .init(gpa),
+        ._ctx_patches = .init(gpa),
         ._widget_stack = .init(gpa),
         .wd = WidgetData{
             .src = src,
@@ -541,6 +544,7 @@ pub fn deinit(self: *Self) void {
     self._lifo_arena.deinit();
     self._widget_stack.deinit();
     self.ctx_layers.deinit(self.gpa);
+    self._ctx_patches.deinit();
     dvui.struct_ui.deinit(self.gpa);
     self.* = undefined;
 }
@@ -575,15 +579,35 @@ pub fn arena(self: *Self) std.mem.Allocator {
     return self._arena.allocator();
 }
 
-/// Appends `layer` to this frame's layer list and returns its index.
-///
-/// `ContextLayer.override` is the only caller: a layer built there keeps its
-/// own fields and points at the layers it inherits from by index.
-pub fn ctxLayerPush(self: *Self, layer: dvui.ContextLayer) ?u32 {
+/// Appends `slot` to this frame's layer list and returns its index.
+pub fn ctxLayerPush(self: *Self, slot: dvui.ContextLayer.Slot) ?u32 {
     const idx = self.ctx_layers.items.len;
-    self.ctx_layers.append(self.gpa, layer) catch return null;
+    self.ctx_layers.append(self.gpa, slot) catch return null;
     self.ctx_layers_peak = @max(self.ctx_layers_peak, @as(u32, @intCast(idx + 1)));
     return @intCast(idx);
+}
+
+/// Stores `layer` as the patches it sets and appends the resulting slot,
+/// keeping `layer._base` as the layer it falls back to.
+///
+/// `ContextLayer.override` is the only caller: the fields a layer actually
+/// wrote are what get kept, so a stored layer is a few hundred bytes of patch
+/// rather than a full layer of nulls.
+pub fn ctxLayerPushLayer(self: *Self, layer: dvui.ContextLayer) ?u32 {
+    const cells = layer.valueCount();
+    const bytes = cells * dvui.ContextLayer.cell_size;
+    const align_bytes = comptime std.mem.Alignment.fromByteUnits(dvui.ContextLayer.cell_align);
+    const raw = self._ctx_patches.allocator().alignedAlloc(u8, align_bytes, bytes) catch return null;
+    const mask = layer.writeLayer(raw);
+    return self.ctxLayerPush(.{ .base = layer._base, .mask = mask, .values = raw });
+}
+
+/// What this frame's layers cost in memory: the slot list plus the patches.
+pub fn ctxLayerBytes(self: *Self) struct { slots: usize, patches: usize } {
+    return .{
+        .slots = @sizeOf(dvui.ContextLayer.Slot) * self.ctx_layers.capacity,
+        .patches = self._ctx_patches.queryCapacity(),
+    };
 }
 
 /// Copies the chain starting at `leaf` so that it ends at `new_root`, and
@@ -600,7 +624,7 @@ pub fn ctxLayerRelink(self: *Self, leaf: u32, new_root: u32) ?u32 {
         if (n == path.len) return null;
         path[n] = at;
         n += 1;
-        cur = self.ctx_layers.items[at]._base;
+        cur = self.ctx_layers.items[at].base;
     }
 
     var next: ?u32 = new_root;
@@ -608,7 +632,7 @@ pub fn ctxLayerRelink(self: *Self, leaf: u32, new_root: u32) ?u32 {
     while (i > 0) {
         i -= 1;
         var copy = self.ctx_layers.items[path[i]];
-        copy._base = next;
+        copy.base = next;
         next = self.ctxLayerPush(copy) orelse return null;
     }
     return next;
@@ -1419,6 +1443,7 @@ pub fn begin(
 
     // Chain indices from the previous frame mean nothing now.
     self.ctx_layers.clearRetainingCapacity();
+    _ = self._ctx_patches.reset(.retain_capacity);
     self.ctx_layers_peak = 0;
 
     // If time_ns jumps backward, then we will stay on the current
