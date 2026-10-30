@@ -16,7 +16,7 @@ icon_opts: dvui.IconRenderOptions,
 pub fn init(self: *IconWidget, src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: dvui.IconRenderOptions, opts: ContextLayer) void {
     var size = Size{};
 
-    if (opts.min_size_content) |msc| {
+    if (opts.get("min_size_content")) |msc| {
         // user gave us a min size, use it
         size = msc;
         if (size.w == 0) {
@@ -63,7 +63,7 @@ pub fn draw(self: *IconWidget) void {
         // user is rasterizing icon with defaults (white), so always use
         // colormod (so icons default to text color)
         texOpts.colormod = self.data().options.color(.text).toColor();
-    } else if (self.data().options.color_text) |ct| {
+    } else if (self.data().options.get("color_text")) |ct| {
         // user is customizing icon rasterization, only colormod if they passed
         // a text color
         texOpts.colormod = ct.toColor();

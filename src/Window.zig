@@ -160,6 +160,14 @@ _arena: std.heap.ArenaAllocator,
 _lifo_arena: std.heap.ArenaAllocator,
 /// Used to allocate widgets with a fixed location
 _widget_stack: WidgetStack,
+/// Layers created by `ContextLayer.override` this frame.  A layer holds an
+/// index into this list as its base; the list only appends within a frame and
+/// is cleared in `begin`, so a layer value must not outlive the frame it was
+/// built in (`ContextLayer.flat` is the way to keep one).
+ctx_layers: std.ArrayListUnmanaged(dvui.ContextLayer) = .empty,
+/// Most layers live at once in a frame, and the capacity the list holds, so a
+/// benchmark can report what the chain costs in memory.
+ctx_layers_peak: u32 = 0,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
@@ -532,6 +540,7 @@ pub fn deinit(self: *Self) void {
     self._arena.deinit();
     self._lifo_arena.deinit();
     self._widget_stack.deinit();
+    self.ctx_layers.deinit(self.gpa);
     dvui.struct_ui.deinit(self.gpa);
     self.* = undefined;
 }
@@ -564,6 +573,45 @@ pub fn lifo(self: *Self) std.mem.Allocator {
 /// For temporary allocations, see `Window.lifo`
 pub fn arena(self: *Self) std.mem.Allocator {
     return self._arena.allocator();
+}
+
+/// Appends `layer` to this frame's layer list and returns its index.
+///
+/// `ContextLayer.override` is the only caller: a layer built there keeps its
+/// own fields and points at the layers it inherits from by index.
+pub fn ctxLayerPush(self: *Self, layer: dvui.ContextLayer) ?u32 {
+    const idx = self.ctx_layers.items.len;
+    self.ctx_layers.append(self.gpa, layer) catch return null;
+    self.ctx_layers_peak = @max(self.ctx_layers_peak, @as(u32, @intCast(idx + 1)));
+    return @intCast(idx);
+}
+
+/// Copies the chain starting at `leaf` so that it ends at `new_root`, and
+/// returns the index of the copy `leaf` referred to.
+///
+/// A slot is shared by every chain that goes through it, so re-rooting one in
+/// place would change the others.  The chain is copied instead; it is short
+/// (a layer per enclosing `override`) and the copy is a memcpy per layer.
+pub fn ctxLayerRelink(self: *Self, leaf: u32, new_root: u32) ?u32 {
+    var path: [16]u32 = undefined;
+    var n: usize = 0;
+    var cur: ?u32 = leaf;
+    while (cur) |at| {
+        if (n == path.len) return null;
+        path[n] = at;
+        n += 1;
+        cur = self.ctx_layers.items[at]._base;
+    }
+
+    var next: ?u32 = new_root;
+    var i = n;
+    while (i > 0) {
+        i -= 1;
+        var copy = self.ctx_layers.items[path[i]];
+        copy._base = next;
+        next = self.ctxLayerPush(copy) orelse return null;
+    }
+    return next;
 }
 
 /// called from gui thread
@@ -1368,6 +1416,10 @@ pub fn begin(
     }
 
     try self.backend.accessKitInitInBegin(&self.accesskit);
+
+    // Chain indices from the previous frame mean nothing now.
+    self.ctx_layers.clearRetainingCapacity();
+    self.ctx_layers_peak = 0;
 
     // If time_ns jumps backward, then we will stay on the current
     // frame_time_ns.  In that case we use a dummy value (10ms) for updating

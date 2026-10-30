@@ -820,7 +820,7 @@ pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.
                     dvui.log.debug("  {s}:{d} {s} {x}", .{
                         wd.src.file,
                         wd.src.line,
-                        wd.options.name orelse "???",
+                        wd.options.get("name") orelse "???",
                         wd.id,
                     });
                     dvui.Debug.errorOutline(wd.rectScale().r);
@@ -841,7 +841,7 @@ pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.
                 .expand = .horizontal,
             });
             if (!self.layout_only) {
-                self.col_header_group.init(@src(), .{ .nav_key_dir = .horizontal }, .{ .tab_index = self.data().options.tab_index });
+                self.col_header_group.init(@src(), .{ .nav_key_dir = .horizontal }, .{ .tab_index = self.data().options.get("tab_index") });
             }
         }
     }
@@ -932,7 +932,7 @@ pub fn ensureBodyScroll(self: *GridWidget) void {
                 dvui.log.debug("  {s}:{d} {s} {x}", .{
                     wd.src.file,
                     wd.src.line,
-                    wd.options.name orelse "???",
+                    wd.options.get("name") orelse "???",
                     wd.id,
                 });
                 dvui.Debug.errorOutline(wd.rectScale().r);
@@ -957,7 +957,7 @@ pub fn ensureBodyScroll(self: *GridWidget) void {
 
         if (!self.layout_only) {
             // do this here so the body of the grid comes after the headers
-            dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
+            dvui.tabIndexSet(self.data().id, self.data().options.get("tab_index"), self.data().rectScale().r);
         }
     }
 }

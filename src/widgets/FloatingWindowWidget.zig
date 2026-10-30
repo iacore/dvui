@@ -123,7 +123,11 @@ drag_area: Rect.Physical = undefined,
 
 pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     const options = defaults.override(opts);
-    var box_options = options;
+
+    // The embedded BoxWidget must not repeat the window's role, label, id or
+    // rect, and clearing a field does not hide the layer beneath it, so this
+    // layer is resolved before those fields are nulled.
+    var box_options = options.flat();
     box_options.role = null;
     box_options.label = null;
     box_options.id_extra = null;
@@ -137,13 +141,13 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
         // the floating window itself doesn't have any styling, it comes from
         // the embedded BoxWidget
         .wd = WidgetData.init(src, .{ .subwindow = true }, .{
-            .id_extra = opts.id_extra,
+            .id_extra = opts.idExtra(),
             // passing options.rect will stop WidgetData.init from calling rectFor
             // which is important because we are outside normal layout
             .rect = .{},
-            .role = options.role,
-            .label = options.label,
-            .name = options.name,
+            .role = options.get("role"),
+            .label = options.get("label"),
+            .name = options.get("name"),
         }),
         .init_options = init_opts,
     };
@@ -158,7 +162,7 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
 
     if (dvui.firstFrame(self.wd.id)) {
         // ContextLayer.rect only affects initial position/size
-        if (opts.rect) |r| {
+        if (opts.get("rect")) |r| {
             self.wd.rect = r;
         }
     }

@@ -262,7 +262,7 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Con
             dvui.log.debug("  {s}:{d} {s} {x}", .{
                 wd.src.file,
                 wd.src.line,
-                wd.options.name orelse "???",
+                wd.options.get("name") orelse "???",
                 wd.id,
             });
             dvui.Debug.errorOutline(wd.rectScale().r);

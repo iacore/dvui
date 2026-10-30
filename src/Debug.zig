@@ -236,7 +236,7 @@ fn startFrameCapture(self: *Debug, gpa: std.mem.Allocator) void {
 pub fn captureWidget(self: *Debug, gpa: std.mem.Allocator, wd: *const dvui.WidgetData) void {
     if (self.frames.items.len == 0) return;
     const frame = &self.frames.items[self.frames.items.len - 1];
-    const name: ?[]const u8 = if (wd.options.name) |n| (gpa.dupe(u8, n) catch null) else null;
+    const name: ?[]const u8 = if (wd.options.get("name")) |n| (gpa.dupe(u8, n) catch null) else null;
     frame.widgets.append(gpa, .{
         .id = wd.id,
         .parent_id = wd.parent.data().id,
@@ -741,8 +741,8 @@ pub fn show(self: *Debug) void {
             \\rs.s {d}
             \\rs.r {f}
         , .{
-            wd.options.name orelse "???",
-            wd.options.role,
+            wd.options.get("name") orelse "???",
+            wd.options.get("role"),
             wd.src.file,
             wd.src.line,
             wd.min_size,
@@ -761,7 +761,8 @@ pub fn show(self: *Debug) void {
 
     if (self.target_wd) |wd| {
         if (self.options_editor_open) {
-            var options, _ = self.options_override.get(wd.id) orelse .{ wd.options, undefined };
+            // The stored layer outlives this frame, so it must not keep a chain.
+            var options, _ = self.options_override.get(wd.id) orelse .{ wd.options.flat(), undefined };
 
             var editor_float = dvui.floatingWindow(@src(), .{
                 .open_flag = &self.options_editor_open,
@@ -771,16 +772,16 @@ pub fn show(self: *Debug) void {
 
             const title = std.fmt.allocPrint(dvui.currentWindow().lifo(), "{x} {s} (+{d})", .{
                 wd.id,
-                wd.options.name orelse "???",
+                wd.options.get("name") orelse "???",
                 wd.options.idExtra(),
-            }) catch wd.options.name orelse "???";
+            }) catch wd.options.get("name") orelse "???";
             defer dvui.currentWindow().lifo().free(title);
 
             editor_float.dragAreaSet(dvui.windowHeader(title, "", &self.options_editor_open));
 
             if (optionsEditor(&options, &wd)) {
-                self.options_override.put(dvui.currentWindow().gpa, wd.id, .{ options, wd.src }) catch |err| {
-                    dvui.logError(@src(), err, "Could not add the override options for {x} {s}", .{ wd.id, wd.options.name orelse "???" });
+                self.options_override.put(dvui.currentWindow().gpa, wd.id, .{ options.flat(), wd.src }) catch |err| {
+                    dvui.logError(@src(), err, "Could not add the override options for {x} {s}", .{ wd.id, wd.options.get("name") orelse "???" });
                 };
             }
         }

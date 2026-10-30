@@ -167,7 +167,7 @@ inline fn nodeCreateFake(_: *AccessKit, _: *dvui.WidgetData, _: Role) ?*Node {
 /// Create a new Node for AccessKit
 /// Returns null if no accessibility information is required for this widget.
 pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node {
-    if (wd.options.role == .none) return null;
+    if (wd.options.roleIs(.none)) return null;
     // text runs are created even if not visible.
     if (!wd.visible() and wd.id != dvui.focusedWidgetId() and role != .text_run) return null;
     if (role == .text_run and self.text_run_parent == null) {
@@ -191,7 +191,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
     }
 
     if (debug_node_tree)
-        std.debug.print("Creating Node for {x}:{d} with role {?t} at {s}:{d}\n", .{ wd.id, wd.id, wd.options.role, wd.src.file, wd.src.line });
+        std.debug.print("Creating Node for {x}:{d} with role {?t} at {s}:{d}\n", .{ wd.id, wd.id, wd.options.get("role"), wd.src.file, wd.src.line });
 
     const ak_node = nodeNew(role.asU8()) orelse return null;
     wd.ak_node = ak_node;
@@ -219,7 +219,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
         }
     }
 
-    if (wd.options.label) |label| {
+    if (wd.options.get("label")) |label| {
         switch (label) {
             .by_id => |id| {
                 nodePushLabelledBy(ak_node, id.asU64());
@@ -248,7 +248,7 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
             },
         }
     }
-    if (wd.options.role == .label) {
+    if (wd.options.roleIs(.label)) {
         if (self.node_waiting_label) {
             if (self.node_to_label == .zero) {
                 self.node_waiting_label = false;

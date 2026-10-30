@@ -42,13 +42,13 @@ pub fn wrapOuter(opts: ContextLayer) ContextLayer {
 pub fn wrapInner(opts: ContextLayer) ContextLayer {
     return opts.strip().override(.{
         .role = .combo_box,
-        .tab_index = opts.tab_index,
-        .border = opts.border,
-        .padding = opts.padding,
-        .corners = opts.corners,
-        .background = opts.background,
+        .tab_index = opts.get("tab_index"),
+        .border = opts.get("border"),
+        .padding = opts.get("padding"),
+        .corners = opts.get("corners"),
+        .background = opts.get("background"),
         .expand = .both,
-        .label = opts.label orelse .{ .label_widget = .next },
+        .label = opts.get("label") orelse .{ .label_widget = .next },
     });
 }
 

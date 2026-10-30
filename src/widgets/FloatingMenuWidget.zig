@@ -91,7 +91,7 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
         // passing options.rect will stop WidgetData.init from calling
         // rectFor/minSizeForChild which is important because we are outside
         // normal layout
-        .wd = .init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{} }),
+        .wd = .init(src, .{ .subwindow = true }, .{ .id_extra = opts.get("id_extra"), .rect = .{} }),
         // get scale from parent
         .scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale(),
 

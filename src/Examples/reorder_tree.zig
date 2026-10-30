@@ -628,7 +628,7 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
             var expander_opts_override = dvui.ContextLayer{
                 .margin = .{ .x = 14 },
                 .color_border = .{ .color = color },
-                .background = if (expander_options.border != null) true else false,
+                .background = expander_options.has("border"),
                 .expand = .horizontal,
             };
 
@@ -935,7 +935,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
         .color_fill = .{ .color = dvui.themeGet().color(.window, .fill) },
         .color_border = .{ .color = tree_palette[0] },
         .expand = .horizontal,
-        .corners = root_branch.button.wd.options.corners,
+        .corners = root_branch.button.wd.options.get("corners"),
         .background = true,
         .border = .{ .x = 1 },
         .box_shadow = .{

@@ -356,7 +356,7 @@ For an intro to immediate-mode GUIs (IMGUIs), see [this respective section from 
   - Since running a widget is a function, you can wrap a widget easily:
     ```zig
     // Let's wrap the sliderEntry widget so we have 3 that represent a Color
-    pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) void {
+    pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: ContextLayer) void {
         var hbox = dvui.box(src, .{ .dir = .horizontal }, opts);
         defer hbox.deinit();
 
@@ -459,7 +459,7 @@ Start with the high-level functions, and when needed, copy the body of the high-
 
 The primary layout mechanism is nesting widgets. DVUI keeps track of the current parent widget. When a widget runs, it is a child of the current parent. A widget may then make itself the current parent, and reset back to the previous parent when it runs `deinit()`.
 
-The parent widget decides what rectangle of the screen to assign to each child, unless the child passes `.rect = ` in their `dvui.Options`.
+The parent widget decides what rectangle of the screen to assign to each child, unless the child passes `.rect = ` in their `dvui.ContextLayer`.
 
 Usually you want each part of a GUI to either be packed tightly (take up only min size), or expand to take the available space. The choice might be different for vertical versus horizontal.
 
@@ -477,7 +477,7 @@ See [readme-implementation](readme-implementation.md) for more information.
 
 ### Appearance
 
-Each widget has the following options that can be changed through the `Options` struct when creating the widget:
+Each widget has the following options that can be changed through the `ContextLayer` struct when creating the widget:
 - `margin` (space outside border)
 - `border` (on each side)
 - `padding` (space inside border)
@@ -534,7 +534,7 @@ DVUI has varying support for different kinds of accessibility infrastructure. Th
   - DVUI's themes can support this
   - No current OS integration
 - Screen reading and alternate input:
-  - Uses `Options.role` and `Options.label` from AccessKit integration
+  - Uses `ContextLayer.role` and `ContextLayer.label` from AccessKit integration
   - [AccessKit](https://accesskit.dev/) integration
   - Add `-Daccesskit` to `zig build`
 

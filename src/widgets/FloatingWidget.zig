@@ -52,7 +52,7 @@ scaler: dvui.ScaleWidget = undefined,
 pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: ContextLayer) void {
     const scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
     var opts = opts_in;
-    if (opts.min_size_content) |msc| {
+    if (opts.get("min_size_content")) |msc| {
         opts.min_size_content = msc.scale(scale_val, Size);
     }
     self.* = .{
@@ -64,7 +64,7 @@ pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: I
             // passing options.rect will stop WidgetData.init from calling
             // rectFor/minSizeForChild which is important because we are outside
             // normal layout
-            o.rect = opts.rect orelse .{};
+            o.rect = opts.get("rect") orelse .{};
             break :blk o;
         }),
     };

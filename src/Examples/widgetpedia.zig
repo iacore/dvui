@@ -2320,10 +2320,10 @@ const DisplayScrollArea = struct {
         }
         if (init_opts.scroll_info) |si| {
             if (si.horizontal == .given) {
-                si.virtual_size.w = options.min_size_content.?.w;
+                si.virtual_size.w = options.min_size_contentGet().w;
             }
             if (si.vertical == .given) {
-                si.virtual_size.h = options.min_size_content.?.h;
+                si.virtual_size.h = options.min_size_contentGet().h;
             }
         }
     }
@@ -2666,7 +2666,7 @@ const DisplaySpacer = struct {
 
         if (struct_ui.displayStruct(@src(), test_options_label, &options, 1, .default, .{display_opts}, &al)) |container| {
             defer container.deinit();
-            border = options.border != null;
+            border = options.has("border");
             const prev_border = border;
             struct_ui.displayBool(@src(), "border", &border, .{ .boolean = .{ .widget_type = .checkbox } }, &al);
             if (prev_border != border) {
@@ -3370,7 +3370,7 @@ const DisplayToolTip = struct {
         }
 
         if (init_opts.position == .absolute) {
-            if (options.rect == null) {
+            if (!options.has("rect")) {
                 options.rect = .{ .x = 100, .y = 100 };
             }
 

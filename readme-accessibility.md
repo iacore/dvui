@@ -201,7 +201,7 @@ Ignoring these rules will not break anything, but will make it harder for access
 
 ## Current State of Accessibility in DVUI
 
-* A role of `null` means the widget will not be added to the accessibility tree, unless the user passes a `role` for that widget via Options.
+* A role of `null` means the widget will not be added to the accessibility tree, unless the user passes a `role` for that widget via ContextLayer.
 
 | Widget | Role | Read Support | Action Support | TODO? | Details |
 |--------|------|--------------|----------------|-------|---------|

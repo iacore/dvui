@@ -525,7 +525,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
         dvui.AccessKit.nodeSetReadOnly(ak_node);
     }
 
-    if (dvui.accesskit_enabled and options.role.? != .none) {
+    if (dvui.accesskit_enabled and !options.roleIs(.none)) {
         var vp = dvui.virtualParent(@src(), .{ .role = .label });
         defer vp.deinit();
         var cw = dvui.currentWindow();
@@ -1883,7 +1883,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
                         break :info .{
                             .node_id = text_run_widget.data().id,
                             .node_parent_id = cw.accesskit.text_run_parent.?,
-                            .controlling_widget_id = if (self.data().options.role.? == .none) cw.accesskit.text_run_parent.? else self.data().id,
+                            .controlling_widget_id = if (self.data().options.roleIs(.none)) cw.accesskit.text_run_parent.? else self.data().id,
                             .line = self.line,
                             .byte_offset = self.bytes_seen,
                         };
@@ -1904,7 +1904,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
                 .color = text_col.color,
                 .gradient = text_col.gradient,
                 // TODO: Should this take `options.background` into account?
-                .background_color = if (options.color_fill) |cog| cog.toColor() else null,
+                .background_color = if (options.get("color_fill")) |cog| cog.toColor() else null,
                 .sel_start = self.selection.start -| self.bytes_seen,
                 .sel_end = self.selection.end -| self.bytes_seen,
                 .sel_color = (dvui.themeGet().text_select orelse dvui.themeGet().color(.highlight, .fill)).opacity(0.75),
@@ -2014,7 +2014,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
             self.sel_end_r_new = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
-        if (self.data().options.rect != null) {
+        if (self.data().options.get("rect") != null) {
             // we were given a rect, so don't need to calculate our min height,
             // so stop as soon as we run off the end of the clipping region
             // this helps for performance
@@ -2256,7 +2256,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: ContextLayer) void {
         if (cw.accesskit.nodes.get(text_run_parent)) |parent_node| {
             if (self.bytes_seen == 0 or self.newline) {
                 // No empty text run was created as no text was rendered. Create one here.
-                self.textRunCreateEmpty(if (self.data().options.role.? == .none) cw.accesskit.text_run_parent.? else self.data().id, self.bytes_seen == 0);
+                self.textRunCreateEmpty(if (self.data().options.roleIs(.none)) cw.accesskit.text_run_parent.? else self.data().id, self.bytes_seen == 0);
             }
 
             if (!self.selection.empty()) {

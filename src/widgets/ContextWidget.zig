@@ -47,7 +47,7 @@ pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: In
     self.* = .{
         .wd = WidgetData.init(src, .{}, blk: {
             var o = defaults.override(opts);
-            o.merge(.{ .rect = dvui.parentGet().data().contentRectScale().rectFromPhysical(init_opts.rect) });
+            o.rect = dvui.parentGet().data().contentRectScale().rectFromPhysical(init_opts.rect);
             break :blk o;
         }),
         .init_options = init_opts,

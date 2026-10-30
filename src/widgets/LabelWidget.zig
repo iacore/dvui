@@ -117,7 +117,7 @@ pub fn initNoFmtAllocator(self: *LabelWidget, src: std.builtin.SourceLocation, l
 
     if (self.data().accesskit_node()) |ak_node| {
         dvui.AccessKit.nodeSetValueWithLength(ak_node, self.label_str.ptr, self.label_str.len);
-        if (self.data().options.label == null) {
+        if (self.data().options.get("label") == null) {
             dvui.AccessKit.nodeSetLabelWithLength(ak_node, self.label_str.ptr, self.label_str.len);
         }
     }

@@ -42,7 +42,7 @@ pub fn format(self: *const Event, writer: *std.Io.Writer) !void {
 /// This makes it possible to see which widget handled the event.
 pub fn handle(self: *Event, src: std.builtin.SourceLocation, wd: *const dvui.WidgetData) void {
     if (dvui.debug.logEvents(null)) {
-        dvui.log.debug("{s}:{d} {f} handled by {s} ({x})", .{ src.file, src.line, self, wd.options.name orelse "???", wd.id });
+        dvui.log.debug("{s}:{d} {f} handled by {s} ({x})", .{ src.file, src.line, self, wd.options.get("name") orelse "???", wd.id });
     }
     self.handled = true;
 }

@@ -52,7 +52,7 @@ pub const Examples = @import("Examples.zig");
 pub const Color = @import("Color.zig");
 pub const Event = @import("Event.zig");
 pub const Font = @import("Font.zig");
-pub const ContextLayer = @import("ContextLayer.zig");
+pub const ContextLayer = @import("context.zig").ContextLayer;
 pub const Point = @import("Point.zig").Point;
 pub const Path = @import("Path.zig");
 pub const Gradient = @import("Gradient.zig").Gradient;
@@ -1244,7 +1244,7 @@ pub fn parentReset(id: Id, prev_parent: Widget) void {
             log.err("  {s}:{d} {s} {x}", .{
                 wd.src.file,
                 wd.src.line,
-                wd.options.name orelse "???",
+                wd.options.get("name") orelse "???",
                 wd.id,
             });
             dvui.Debug.errorOutline(wd.rectScale().r);
@@ -2233,7 +2233,7 @@ pub fn tabIndexSetEx(widget_id: Id, tab_index: ?u16, rect: ?Rect.Physical, tab_g
 
             // now modify the TabIndex so that we can look it up in the global order
             ti.in_focus_group = true;
-            ti.tabIndex = fg.data().options.tab_index orelse math.maxInt(u16);
+            ti.tabIndex = fg.data().options.get("tab_index") orelse math.maxInt(u16);
         }
     }
 
@@ -3502,16 +3502,12 @@ pub const ExpanderOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ExpanderOptions, opts: ContextLayer) bool {
-    const options = blk: {
-        var o = expander_defaults.override(.{ .font = opts.themeGet().font_heading });
-        o.merge(opts);
-        break :blk o;
-    };
+    const options = expander_defaults.override(.{ .font = opts.themeGet().font_heading }).override(opts);
 
     var b = box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
 
-    dvui.tabIndexSet(b.data().id, b.data().options.tab_index, b.data().rectScale().r);
+    dvui.tabIndexSet(b.data().id, b.data().options.get("tab_index"), b.data().rectScale().r);
 
     var expanded_storage: bool = dvui.dataGet(null, b.data().id, "__expand", bool) orelse init_opts.default_expanded;
     const expanded = init_opts.expanded orelse &expanded_storage;
@@ -3567,6 +3563,11 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Co
     var options = group_box_defaults.override(.{
         .label = .{ .text = label_str },
     }).override(opts);
+
+    // The offsets and the uniform-border fix below are computed from the
+    // resolved values and written back, so they would be shadowed by the layers
+    // underneath; resolve the chain first.
+    options = options.flat();
 
     const text_size = options.fontGet().textSize(label_str);
 
@@ -4028,7 +4029,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
     lw.init(src, fmt, args, init_opts.label_opts, defaults.override(opts));
     // draw border and background
 
-    dvui.tabIndexSet(lw.data().id, lw.data().options.tab_index, lw.data().rectScale().r);
+    dvui.tabIndexSet(lw.data().id, lw.data().options.get("tab_index"), lw.data().rectScale().r);
 
     var ret = false;
     if (dvui.clickedEx(lw.data(), .{ .buttons = .any })) |click_event| {
@@ -4136,7 +4137,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
     const options = (ContextLayer{ .name = "image", .role = .image }).override(opts);
 
     var size = Size{};
-    if (options.min_size_content) |msc| {
+    if (options.get("min_size_content")) |msc| {
         // user gave us a min size, use it
         size = msc;
     } else {
@@ -4267,7 +4268,8 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     // - reports its min size to bw
     labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, blk: {
         var o = opts.strip().override(bw.style());
-        o.merge(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
+        o.gravity_x = 0.5;
+        o.gravity_y = 0.5;
         break :blk o;
     });
 
@@ -4298,7 +4300,12 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
         icon_opts,
         blk: {
             var o = opts.strip().override(bw.style());
-            o.merge(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text, .role = .none });
+            o.gravity_x = 0.5;
+            o.gravity_y = 0.5;
+            o.min_size_content = opts.get("min_size_content");
+            o.expand = .ratio;
+            o.color_text = opts.get("color_text");
+            o.role = .none;
             break :blk o;
         },
     );
@@ -4327,7 +4334,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: Button
     bw.processEvents();
     const options = blk: {
         var o = opts.strip().override(bw.style());
-        o.merge(.{ .gravity_y = 0.5 });
+        o.gravity_y = 0.5;
         break :blk o;
     };
 
@@ -4389,7 +4396,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         AccessKit.nodeSetNumericValueJump(ak_node, 0.10);
     }
 
-    tabIndexSet(b.data().id, options.tab_index, b.data().rectScale().r);
+    tabIndexSet(b.data().id, options.get("tab_index"), b.data().rectScale().r);
 
     var hovered: bool = false;
     var ret = false;
@@ -4612,7 +4619,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         }
     }
 
-    tabIndexSet(b.data().id, options.tab_index, b.data().rectScale().r);
+    tabIndexSet(b.data().id, options.get("tab_index"), b.data().rectScale().r);
 
     const br = b.data().contentRect();
     const knobsize = @min(br.w, br.h);
@@ -5000,7 +5007,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
     defer b.deinit();
 
     const rs = b.data().contentRectScale();
-    const corner = options.cornersGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
+    const corner = options.cornersGet().finalize(opts.themeGet()).scale(rs.s, CornerRect.Physical);
     rs.r.fill(corner, .{ .color = options.color(.fill), .fade = 1.0 });
 
     const perc = @max(0, @min(1, init_opts.percent));
@@ -5040,7 +5047,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     var b = box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
 
-    dvui.tabIndexSet(b.data().id, b.data().options.tab_index, b.data().rectScale().r);
+    dvui.tabIndexSet(b.data().id, b.data().options.get("tab_index"), b.data().rectScale().r);
 
     var hovered: bool = false;
     if (dvui.clicked(b.data(), .{ .hovered = &hovered })) {
@@ -5075,7 +5082,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 }
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: ContextLayer) void {
-    const cornerRad = opts.cornersGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
+    const cornerRad = opts.cornersGet().finalize(opts.themeGet()).scale(rs.s, CornerRect.Physical);
     rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
@@ -5126,7 +5133,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     var b = box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
 
-    dvui.tabIndexSet(b.data().id, b.data().options.tab_index, b.data().rectScale().r);
+    dvui.tabIndexSet(b.data().id, b.data().options.get("tab_index"), b.data().rectScale().r);
 
     var hovered: bool = false;
     if (dvui.clicked(b.data(), .{ .hovered = &hovered })) {
@@ -5339,11 +5346,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     if (init_opts.text_limit) |limit| {
         limit_size = font.sizeM(limit, 1);
     }
-    const options = blk: {
-        var o = default_opts.override(.{ .min_size_content = limit_size });
-        o.merge(opts);
-        break :blk o;
-    };
+    const options = default_opts.override(.{ .min_size_content = limit_size }).override(opts);
 
     var te: TextEntryWidget = undefined;
     te.init(src, .{
@@ -5484,7 +5487,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
     const defaults = ContextLayer{ .name = "textEntryColor" };
 
     var options = defaults.override(opts);
-    if (options.min_size_content == null) {
+    if (!options.has("min_size_content")) {
         options = options.override(.{ .min_size_content = opts.fontGet().textSize(if (init_opts.allow_alpha) "#DDDDDDDD" else "#DDDDDD") });
     }
 

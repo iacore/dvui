@@ -32,10 +32,6 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Co
     const id = parent.extendId(src, opts.idExtra());
 
     var options = if (dvui.debug.options_override.get(id)) |val| val.@"0" else opts;
-    if (options.corners) |*corners| corners.* = corners.finalize(options.theme);
-    if (options.box_shadow) |*box_shadow| {
-        if (box_shadow.corners) |*corners| corners.* = corners.finalize(options.theme);
-    }
 
     const min_size = options.min_sizeGet();
     var ms = min_size;
@@ -46,7 +42,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Co
         ms = Size.max(ms, min_last_frame);
     }
 
-    const rect = if (options.rect) |r|
+    const rect = if (options.get("rect")) |r|
         r.toSize(.{
             .w = if (options.expandGet().isHorizontal())
                 parent.data().contentRect().w
@@ -81,15 +77,15 @@ pub fn rectSet(self: *WidgetData, r: Rect) void {
 pub fn register(self: *WidgetData) void {
     self.rectSet(self.rect);
 
-    if (self.options.theme) |t| {
+    if (self.options.get("theme")) |t| {
         dvui.currentWindow().addEmbeddedFontsFromTheme(t);
     }
 
-    if (self.options.role) |role| {
+    if (self.options.get("role")) |role| {
         _ = dvui.currentWindow().accesskit.nodeCreate(self, role);
     }
 
-    if (self.options.data_out) |do| {
+    if (self.options.get("data_out")) |do| {
         do.* = self.*;
     }
 
@@ -101,7 +97,7 @@ pub fn register(self: *WidgetData) void {
 
     var cw = dvui.currentWindow();
 
-    if (self.options.tag) |t| {
+    if (self.options.get("tag")) |t| {
         dvui.tag(t, .{ .id = self.id, .rect = self.rectScale().r, .visible = self.visible() });
     }
 
@@ -151,7 +147,7 @@ pub fn register(self: *WidgetData) void {
 
     if (cw.min_sizes.containsUsed(self.id)) |used| {
         if (used) {
-            const name: []const u8 = self.options.name orelse "???";
+            const name: []const u8 = self.options.get("name") orelse "???";
             dvui.log.err("{s}:{d} duplicate widget id {x} (widget \"{s}\" highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ self.src.file, self.src.line, self.id, name });
             dvui.Debug.errorOutline(self.rectScale().r);
         }
@@ -170,9 +166,9 @@ pub fn register(self: *WidgetData) void {
             dvui.debug.under_mouse_stack.append(cw.gpa, .{
                 .id = self.id,
                 // Fallback must be empty so that freeing the name will be valid
-                .name = cw.gpa.dupe(u8, self.options.name orelse "") catch "",
+                .name = cw.gpa.dupe(u8, self.options.get("name") orelse "") catch "",
             }) catch |err| {
-                dvui.logError(@src(), err, "Could not add debug info for widgets under mouse position. Widget {x} {s}", .{ self.id, self.options.name orelse "???" });
+                dvui.logError(@src(), err, "Could not add debug info for widgets under mouse position. Widget {x} {s}", .{ self.id, self.options.get("name") orelse "???" });
             };
             dvui.debug.widget_id = self.id;
         }
@@ -205,9 +201,9 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
         return;
     }
 
-    if (self.options.box_shadow) |bs| {
+    if (self.options.get("box_shadow")) |bs| {
         const rs = self.borderRectScale();
-        const corners = bs.corners orelse self.options.cornersGet();
+        const corners = (bs.corners orelse self.options.cornersGet()).finalize(self.options.themeGet());
 
         const prect = rs.r.insetAll(rs.s * bs.shrink).offsetPoint(bs.offset.scale(rs.s, dvui.Point.Physical));
 
@@ -369,7 +365,7 @@ pub fn minSizeSetAndRefresh(self: *WidgetData) void {
 }
 
 pub fn minSizeReportToParent(self: *const WidgetData) void {
-    if (self.options.rect == null) {
+    if (self.options.get("rect") == null) {
         self.parent.minSizeForChild(self.min_size);
     }
 }

@@ -127,13 +127,17 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     }
 
     options = options.override(opts);
-    if (!init_opts.multiline and options.max_size_content == null) {
+    if (!init_opts.multiline and !options.has("max_size_content")) {
         options = options.override(.{ .max_size_content = .size(options.min_size_contentGet()) });
     }
 
     // padding is interpreted as the padding for the TextLayoutWidget, but
     // we also need to add it to content size because TextLayoutWidget is
-    // inside the scroll area
+    // inside the scroll area.
+    //
+    // Clearing `padding` and adjusting the sizes below would be shadowed by the
+    // layers underneath, so resolve the chain first.
+    options = options.flat();
     const padding = options.paddingGet();
     options.padding = null;
     options.min_size_content.?.w += padding.x + padding.w;
@@ -182,7 +186,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
 
     self.data().register();
 
-    dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
+    dvui.tabIndexSet(self.data().id, self.data().options.get("tab_index"), self.data().rectScale().r);
 
     dvui.parentSet(self.widget());
 
@@ -297,7 +301,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.scroll_into_view); // AK TODO - not yet implemented
         AccessKit.nodeSetClipsChildren(ak_node); // AK TODO: Check this is correct?
 
-        if (self.data().options.role != .password_input) {
+        if (self.data().options.get("role") != .password_input) {
             const str = self.text[0..self.len];
             AccessKit.nodeSetValueWithLength(ak_node, str.ptr, str.len);
         }

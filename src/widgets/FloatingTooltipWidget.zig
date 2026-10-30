@@ -112,7 +112,11 @@ pub fn init(self: *FloatingTooltipWidget, src: std.builtin.SourceLocation, init_
         .init_options = init_opts,
     };
 
-    if (self.options.min_size_content) |msc| {
+    // The two adjustments below clear and rewrite fields that the layers
+    // underneath may also set, so resolve the chain first.
+    self.options = self.options.flat();
+
+    if (self.options.get("min_size_content")) |msc| {
         self.options.min_size_content = msc.scale(self.scale_val, Size);
     }
 

@@ -44,7 +44,7 @@ pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitO
 
     self.scroll.init(src, scroll_opts, defaults.override(opts));
 
-    self.group.init(@src(), .{ .nav_key_dir = self.init_options.dir }, .{ .tab_index = opts.tab_index });
+    self.group.init(@src(), .{ .nav_key_dir = self.init_options.dir }, .{ .tab_index = opts.get("tab_index") });
 
     const margin: Rect = switch (self.init_options.dir) {
         .horizontal => .{ .y = 2 },
@@ -122,7 +122,6 @@ pub fn addTab(self: *TabsWidget, selected: bool, at_options: AddTabOptions, opts
     }
 
     const options = tab_defaults.override(opts);
-
     self.tab_button.init(@src(), .{}, options);
     if (at_options.process_events) {
         self.tab_button.processEvents();
