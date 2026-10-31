@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 920" width="900" height="920" font-family="system-ui,-apple-system,Segoe UI,Helvetica,Arial,sans-serif">
+<rect x="0" y="0" width="900" height="920" fill="#ffffff"/>
+<text x="20" y="26" font-size="15" font-weight="600" fill="#1f2328">dvui per-frame: 31.28M instructions</text>
+<text x="20" y="44" font-size="11" fill="#57606a">steady state, setup excluded &#183; callgrind over the headless demo bench, freetype 2.14.1, ReleaseFast</text>
+<text x="420" y="98" font-size="12" fill="#1f2328" text-anchor="end">freetype: charmap lookup</text>
+<rect x="430" y="78" width="300.0" height="30" fill="#cf222e" rx="2"/>
+<text x="738.0" y="98" font-size="12" font-weight="600" fill="#1f2328">5.62M  18%</text>
+<text x="420" y="142" font-size="12" fill="#1f2328" text-anchor="end">dvui: text measure + vertex emit</text>
+<rect x="430" y="122" width="259.1" height="30" fill="#0969da" rx="2"/>
+<text x="697.1" y="142" font-size="12" font-weight="600" fill="#1f2328">4.85M  16%</text>
+<text x="420" y="186" font-size="12" fill="#1f2328" text-anchor="end">dvui: Options.override</text>
+<rect x="430" y="166" width="210.3" height="30" fill="#0969da" rx="2"/>
+<text x="648.3" y="186" font-size="12" font-weight="600" fill="#1f2328">3.94M  13%</text>
+<text x="420" y="230" font-size="12" fill="#1f2328" text-anchor="end">freetype: kerning</text>
+<rect x="430" y="210" width="203.1" height="30" fill="#cf222e" rx="2"/>
+<text x="641.1" y="230" font-size="12" font-weight="600" fill="#1f2328">3.80M  12%</text>
+<text x="420" y="274" font-size="12" fill="#1f2328" text-anchor="end">dvui: layout + widget bookkeeping</text>
+<rect x="430" y="254" width="148.2" height="30" fill="#0969da" rx="2"/>
+<text x="586.2" y="274" font-size="12" font-weight="600" fill="#1f2328">2.78M  9%</text>
+<text x="420" y="318" font-size="12" fill="#1f2328" text-anchor="end">memcpy/memset</text>
+<rect x="430" y="298" width="95.2" height="30" fill="#8c959f" rx="2"/>
+<text x="533.2" y="318" font-size="12" font-weight="600" fill="#1f2328">1.78M  6%</text>
+<text x="420" y="362" font-size="12" fill="#1f2328" text-anchor="end">maps + hashing</text>
+<rect x="430" y="342" width="92.8" height="30" fill="#8c959f" rx="2"/>
+<text x="530.8" y="362" font-size="12" font-weight="600" fill="#1f2328">1.74M  6%</text>
+<text x="420" y="406" font-size="12" fill="#1f2328" text-anchor="end">dvui: render + geometry</text>
+<rect x="430" y="386" width="64.5" height="30" fill="#0969da" rx="2"/>
+<text x="502.5" y="406" font-size="12" font-weight="600" fill="#1f2328">1.21M  4%</text>
+<text x="420" y="450" font-size="12" fill="#1f2328" text-anchor="end">dvui: hover, capture, ids</text>
+<rect x="430" y="430" width="59.6" height="30" fill="#0969da" rx="2"/>
+<text x="497.6" y="450" font-size="12" font-weight="600" fill="#1f2328">1.12M  4%</text>
+<text x="420" y="494" font-size="12" fill="#1f2328" text-anchor="end">std: math (plot ticks, geometry)</text>
+<rect x="430" y="474" width="57.5" height="30" fill="#8c959f" rx="2"/>
+<text x="495.5" y="494" font-size="12" font-weight="600" fill="#1f2328">1.08M  3%</text>
+<text x="420" y="538" font-size="12" fill="#1f2328" text-anchor="end">dvui: other</text>
+<rect x="430" y="518" width="45.7" height="30" fill="#0969da" rx="2"/>
+<text x="483.7" y="538" font-size="12" font-weight="600" fill="#1f2328">0.86M  3%</text>
+<text x="420" y="582" font-size="12" fill="#1f2328" text-anchor="end">runtime / std other</text>
+<rect x="430" y="562" width="39.5" height="30" fill="#8c959f" rx="2"/>
+<text x="477.5" y="582" font-size="12" font-weight="600" fill="#1f2328">0.74M  2%</text>
+<text x="420" y="626" font-size="12" fill="#1f2328" text-anchor="end">std: unicode decode</text>
+<rect x="430" y="606" width="23.9" height="30" fill="#8c959f" rx="2"/>
+<text x="461.9" y="626" font-size="12" font-weight="600" fill="#1f2328">0.45M  1%</text>
+<text x="420" y="670" font-size="12" fill="#1f2328" text-anchor="end">long tail (&lt;2k each)</text>
+<rect x="430" y="650" width="23.7" height="30" fill="#8c959f" rx="2"/>
+<text x="461.7" y="670" font-size="12" font-weight="600" fill="#1f2328">0.44M  1%</text>
+<text x="420" y="714" font-size="12" fill="#1f2328" text-anchor="end">allocator</text>
+<rect x="430" y="694" width="19.8" height="30" fill="#8c959f" rx="2"/>
+<text x="457.8" y="714" font-size="12" font-weight="600" fill="#1f2328">0.37M  1%</text>
+<text x="420" y="758" font-size="12" fill="#1f2328" text-anchor="end">other</text>
+<rect x="430" y="738" width="18.5" height="30" fill="#8c959f" rx="2"/>
+<text x="456.5" y="758" font-size="12" font-weight="600" fill="#1f2328">0.35M  1%</text>
+<text x="420" y="802" font-size="12" fill="#1f2328" text-anchor="end">std: sorting</text>
+<rect x="430" y="782" width="8.7" height="30" fill="#8c959f" rx="2"/>
+<text x="446.7" y="802" font-size="12" font-weight="600" fill="#1f2328">0.16M  1%</text>
+<rect x="430" y="835" width="11" height="11" fill="#cf222e" rx="2"/>
+<text x="447" y="846" font-size="11" fill="#1f2328">freetype</text>
+<rect x="560" y="835" width="11" height="11" fill="#0969da" rx="2"/>
+<text x="577" y="846" font-size="11" fill="#1f2328">dvui</text>
+<rect x="690" y="835" width="11" height="11" fill="#8c959f" rx="2"/>
+<text x="707" y="846" font-size="11" fill="#1f2328">std, memory, allocator, other</text>
+<text x="20" y="870" font-size="11" fill="#57606a">Least-squares slope over 11, 21, 111 and 311 frames; every pair of runs agrees within 0.01%. Groups follow the source</text>
+<text x="20" y="885" font-size="11" fill="#57606a">tree, not call depth: a callee counts in the group that owns it.</text>
+</svg>

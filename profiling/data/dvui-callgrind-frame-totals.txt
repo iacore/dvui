@@ -1,0 +1,47 @@
+dvui callgrind profile - headless demo bench
+2026-10-31
+
+target    dvui main @ 41896697, with examples/ds-bench.zig taken from PR #1033
+workload  dvui.Examples.demo(.lite) in the demo window, 1000x700 logical at 2x
+build     zig 0.17.0, zig build ds-bench -Dbackend=testing -Doptimize=ReleaseFast -Dfreetype=true
+tool      valgrind 3.25.1, callgrind (cache and branch simulation off, only Ir counted)
+host      x86_64, 8 cores, Arch Linux
+
+Total retired instructions per run. The binary was built once; only --frames
+changes between runs, and two runs at 111 frames produced the same number
+(3,605,605,747), so the workload is deterministic.
+
+  frames            total Ir
+       0             613,794   process start, backend init, Window.init, no frame
+       1         136,445,374
+       2         193,980,317
+      11         477,585,036
+      15         602,689,390
+      21         790,382,472
+     111       3,605,605,747
+     311       9,862,046,376
+
+Derived:
+
+  steady per-frame, least squares over 11/21/111/311   31,281,572
+    local slopes  11->21   31,279,744
+                  21->111  31,280,259
+                 111->311  31,282,203
+    (all four points lie on one line to within 0.01%)
+
+  one-time setup, least-squares intercept             133,446,474
+  one-time setup, first two frames minus two steady   131,417,173
+  frame 1                                            135,831,580  (+104,550,008 over steady)
+  frame 2                                             57,534,943  (+26,253,371 over steady)
+
+Cross-check against discussion #1032: the 15-frame run there was reported as
+602,545,306 instructions; this build measures 602,689,390, a difference of
+0.02%.
+
+files in this set:
+  dvui-callgrind-per-function.tsv     per-function Ir for every run, plus the
+                                      fitted per-frame and setup columns
+  dvui-callgrind-frames-N.out.gz      raw callgrind output for the N-frame run
+                                      (callgrind_annotate or kcachegrind reads
+                                      them; absolute paths were rewritten to
+                                      neutral tokens, the counters are untouched)

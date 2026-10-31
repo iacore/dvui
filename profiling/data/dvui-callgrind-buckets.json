@@ -1,0 +1,94 @@
+{
+ "per_frame": 31281572.1057684,
+ "setup": 131417172.7884632,
+ "buckets": {
+  "other": [
+   347295.0,
+   502895.0
+  ],
+  "long tail (<2k each)": [
+   444661.31351700384,
+   224339.37296599228
+  ],
+  "dvui: layout + widget bookkeeping": [
+   2775012.9865690917,
+   64266.026861816616
+  ],
+  "freetype: rasterizer": [
+   0.0,
+   10121577.0
+  ],
+  "dvui: text measure + vertex emit": [
+   4852572.40292725,
+   677664.1941455015
+  ],
+  "freetype: other": [
+   0.0,
+   10856075.0
+  ],
+  "runtime / std other": [
+   739219.5801119242,
+   888847.8397761515
+  ],
+  "memcpy/memset": [
+   1783527.9179509254,
+   1254671.1640981492
+  ],
+  "allocator": [
+   371607.3898407232,
+   1724142.2203185535
+  ],
+  "dvui: other": [
+   856656.0,
+   -376046.0
+  ],
+  "std: unicode decode": [
+   447324.1962978907,
+   -33170.39259578132
+  ],
+  "maps + hashing": [
+   1737592.0,
+   1031796.0
+  ],
+  "dvui: Options.override": [
+   3938849.0,
+   160266.0
+  ],
+  "freetype: charmap lookup": [
+   5618784.986052518,
+   2349607.0278949644
+  ],
+  "freetype: kerning": [
+   3804566.332501076,
+   930.3349978476181
+  ],
+  "dvui: render + geometry": [
+   1207398.0,
+   -1017816.0
+  ],
+  "dvui: hover, capture, ids": [
+   1116260.0,
+   45219.0
+  ],
+  "freetype: autohinter": [
+   0.0,
+   11995395.0
+  ],
+  "freetype: outline load": [
+   0.0,
+   11154766.0
+  ],
+  "std: math (plot ticks, geometry)": [
+   1076523.0,
+   -574469.0
+  ],
+  "freetype: hinting interpreter": [
+   0.0,
+   80479150.0
+  ],
+  "std: sorting": [
+   163722.0,
+   -112933.0
+  ]
+ }
+}
